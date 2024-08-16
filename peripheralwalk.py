@@ -37,17 +37,18 @@ def run_until_next_err(start_addr):
 
 
 def walk_binary(base, entrypoint, ram_size):
-
     curr_addr = entrypoint
     # for now, let's run until we get to the first exception and print out the address
     run_until_next_err(curr_addr)
     
 
 """ Setup emu with base params """
-def load_emu(binary, base, entrypoint, ram_size):
-    # for now, let's just force ARM w/o thumb for testing
+def load_emu(binary, base, entrypoint, ram_size, thumb=False):
     global mu
-    mu = Uc(UC_ARCH_ARM, UC_MODE_ARM)
+    global ds
+
+    # Initialize Unicorn emulator for ARM for testing
+    mu = Uc(UC_ARCH_ARM, UC_MODE_THUMB if thumb else UC_MODE_ARM)
 
     # init our RAM
     mu.mem_map(base, ram_size)
@@ -57,16 +58,18 @@ def load_emu(binary, base, entrypoint, ram_size):
    
     # FTODO: setup regs and hooks
     mu.hook_add(UC_HOOK_BLOCK, test_hook)
-
     mu.hook_add(UC_HOOK_MEM_READ_UNMAPPED, unmapped_read_hook)
     mu.hook_add(UC_HOOK_MEM_WRITE_UNMAPPED, unmapped_write_hook)
+
+    # Initialize Capstone disassembler for ARM
+    md = Cs(CS_ARCH_ARM, CS_MODE_THUMB if thumb else CS_MODE_ARM)
+    ds = md
 
 def auto_int(x):
     return int(x,0)
 
-if __name__ == '__main__':
+def parse_args():
     parser = argparse.ArgumentParser()
-
 
     parser.add_argument("binary", type=argparse.FileType('rb'), help="Target binary to emulate.")
 
@@ -74,9 +77,16 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--entrypoint", default=0x0, type=auto_int, help="Entrypoint address for binary")
     parser.add_argument("-r", "--ram", default=1 * 1024 * 1024 * 1024, type=auto_int, help="RAM Size (default, 1G)")
 
+    return parser.parse_args()
 
-    args = parser.parse_args()
+def main():
+    args = parse_args()
 
     load_emu(args.binary.read(), args.base, args.entrypoint, args.ram)
 
+    # Start emulation
     walk_binary(args.base, args.entrypoint, args.ram)
+
+
+if __name__ == '__main__':
+    main()
